@@ -16,8 +16,8 @@ env-cleanup:
 	@printf "Очистить все volume файлы? Опасность потери данных. [Y/n]: " ans; \
 	read ans; \
 	if [ "$$ans" = "Y" ]; then \
-	  docker compose down todoapp-postgres && \
-	  rm -rf out/pgdata && \
+	  docker compose down todoapp-postgres port-forwarder && \
+	  rm -rf ${PROJECT_ROOT}/out/pgdata && \
 	  echo "Файлы очищены"; \
 	else \
 	  echo "Очистка окружения отменена"; \
@@ -56,3 +56,9 @@ migrate-action:
 		-path /migrations \
 		-database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@todoapp-postgres/${POSTGRES_DB}?sslmode=disable" \
 		"$(action)"
+
+todoapp-run:
+	@export LOGGER_FOLDER=${PROJECT_ROOT}/out/logs && \
+	export POSTGRES_HOST=localhost && \
+	go mod tidy && \
+	go run ${PROJECT_ROOT}/cmd/todo-app/main.go
