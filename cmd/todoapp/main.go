@@ -24,8 +24,15 @@ import (
 	users_service "github.com/mercuryqa/todo-app/internal/features/users/service"
 	users_transport_http "github.com/mercuryqa/todo-app/internal/features/users/transport/http"
 	"go.uber.org/zap"
+
+	_ "github.com/mercuryqa/todo-app/docs"
 )
 
+// @title        Golang Todo API
+// @version      1.0
+// @description  Todo Application REST-API scheme
+// @host         127.0.0.1:5050
+// @BasePath     /api/v1
 func main() {
 	cfg := core_config.NewConfigMust()
 	time.Local = cfg.TimeZone
@@ -79,10 +86,11 @@ func main() {
 	httpServer := server.NewHTTPServer(
 		server.NewConfigMust(),
 		logger,
+		core_http_middleware.CORS(),
 		core_http_middleware.RequestID(),
 		core_http_middleware.Logger(logger),
 		core_http_middleware.Trace(),
-		core_http_middleware.Recovery(),
+		core_http_middleware.Panic(),
 	)
 
 	apiVersionRouterV1 := server.NewApiVersionRouter(server.ApiVersion1)
@@ -100,6 +108,8 @@ func main() {
 		apiVersionRouterV1,
 		apiVersionRouterV2,
 	)
+
+	httpServer.RegisterSwagger()
 
 	if err = httpServer.Run(ctx); err != nil {
 		logger.Error("HTTP server run error", zap.Error(err))

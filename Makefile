@@ -78,6 +78,24 @@ todoapp-run:
 	go mod tidy && \
 	go run ${PROJECT_ROOT}/cmd/todoapp/main.go
 
+#swagger-gen:
+#	@docker compose run --rm swagger \
+#		init \
+#		-g main.go \
+#		-d ./cmd/todoapp \
+#		-o docs \
+#		--parseInternal \
+#		--parseDependency
+
+swagger-gen:
+	@docker compose run --rm swagger \
+		init \
+		-g main.go \
+		-d ./cmd/todoapp,./internal/features/users/transport/http,./internal/features/tasks/transport/http,./internal/features/statistics/transport/http \
+		-o docs \
+		--parseInternal \
+		--parseDependency
+
 ps:
 	@docker compose ps
 

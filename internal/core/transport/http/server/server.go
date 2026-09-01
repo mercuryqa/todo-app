@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mercuryqa/todo-app/docs"
 	coreLogger "github.com/mercuryqa/todo-app/internal/core/logger"
 	"github.com/mercuryqa/todo-app/internal/core/transport/http/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +46,24 @@ func (s *HTTPServer) RegisterAPIRouters(routers ...*APIVersionRouter) {
 			prefix+"/",
 			http.StripPrefix(prefix, router.WithMiddleware()))
 	}
+}
+
+// RegisterSwagger - регистирую swagger
+func (s *HTTPServer) RegisterSwagger() {
+	s.mux.Handle(
+		"/swagger/",
+		httpSwagger.Handler(
+			httpSwagger.URL("/swagger/doc.json"),
+			// Удаляет часть moduls с моделями go из свагера - "github.com/swaggo/http-swagger/v2"
+			// httpSwagger.DefaultModelsExpandDepth(-1),
+		),
+	)
+
+	s.mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(docs.SwaggerInfo.ReadDoc()))
+	})
 }
 
 // Run - запускает сервер
