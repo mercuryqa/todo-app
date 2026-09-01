@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	core_config "github.com/mercuryqa/todo-app/internal/core/config"
 	coreLogger "github.com/mercuryqa/todo-app/internal/core/logger"
 	core_pgx_pool "github.com/mercuryqa/todo-app/internal/core/repository/postgres/pool/pgx"
 	core_http_middleware "github.com/mercuryqa/todo-app/internal/core/transport/http/middleware"
@@ -22,12 +23,9 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	timeZone = time.UTC
-)
-
 func main() {
-	time.Local = timeZone
+	cfg := core_config.NewConfigMust()
+	time.Local = cfg.TimeZone
 
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
@@ -43,7 +41,7 @@ func main() {
 	}
 	defer logger.Close()
 
-	logger.Debug("application time zone", zap.Any("zone", timeZone))
+	logger.Debug("application time zone", zap.Any("zone", time.Local))
 
 	// Создаём пулл соединений с PostgreSQL через библиотеку pgx.
 	// Пул переиспользует соединения, что гораздо эффективнее,
