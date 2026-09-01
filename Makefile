@@ -69,6 +69,9 @@ logs-cleanup: ## env: Очистить файлы логов из out/logs
 todoapp-deploy:
 	docker compose up -d --build todoapp
 
+todoapp-undeploy:
+	docker compose down todoapp
+
 todoapp-run:
 	@export LOGGER_FOLDER=${PROJECT_ROOT}/out/logs && \
 	export POSTGRES_HOST=localhost && \
