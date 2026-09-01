@@ -33,15 +33,14 @@ const (
 //
 // Используем map для O(1) поиска вместо O(n) перебора списка.
 // Preflight-запросы (OPTIONS) обрабатываются сразу без передачи дальше.
-func CORS() Middleware {
+func CORS(allowedOriginsList []string) Middleware {
+	allowedOrigins := make(map[string]struct{})
+	for _, origin := range allowedOriginsList {
+		allowedOrigins[origin] = struct{}{}
+	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-			allowedOrigins := map[string]struct{}{
-				"http://localhost:5050": {},
-				"null":                  {},
-			}
 
 			origin := r.Header.Get("Origin")
 
@@ -61,34 +60,6 @@ func CORS() Middleware {
 		})
 	}
 }
-
-//func CORS(allowedOriginsList []string) Middleware {
-//	allowedOrigins := make(map[string]struct{})
-//	for _, origin := range allowedOriginsList {
-//		allowedOrigins[origin] = struct{}{}
-//	}
-//
-//	return func(next http.Handler) http.Handler {
-//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//
-//			origin := r.Header.Get("Origin")
-//
-//			if _, ok := allowedOrigins[origin]; ok {
-//				w.Header().Set("Access-Control-Allow-Origin", origin)
-//				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-//				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-//			}
-//
-//			// Preflight OPTIONS — браузер проверяет разрешение CORS перед основным запросом.
-//			if r.Method == http.MethodOptions {
-//				w.WriteHeader(http.StatusOK)
-//				return
-//			}
-//
-//			next.ServeHTTP(w, r)
-//		})
-//	}
-//}
 
 // RequestID — middleware, обеспечивающий каждый запрос уникальным идентификатором.
 // Если клиент передаёт X-Request-ID — используем его (полезно для распределённой трассировки).
