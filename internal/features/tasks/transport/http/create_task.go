@@ -5,14 +5,14 @@ import (
 
 	"github.com/mercuryqa/todo-app/internal/core/domain"
 	core_logger "github.com/mercuryqa/todo-app/internal/core/logger"
-	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/http_response"
 	core_http_request "github.com/mercuryqa/todo-app/internal/core/transport/http/request"
+	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/response"
 )
 
 type CreateTaskRequest struct {
 	Title        string  `json:"title" validate:"required,min=1,max=100"         example:"Домашнее задание"`
 	Description  *string `json:"description" validate:"omitempty,min=1,max=1000" example:"Сделать до четверга домашнее задание по математике"`
-	AuthorUserID int     `json:"author_user_id" validate:"required"              example:"550e8400-e29b-41d4-a716-446655440000"`
+	AuthorUserID int     `json:"author_user_id" validate:"required"              example:"1"`
 }
 
 type CreateTaskResponse TaskDTOResponse

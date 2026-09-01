@@ -8,7 +8,7 @@ import (
 	core_http_types "github.com/mercuryqa/todo-app/internal/core/transport/http/types"
 	//core_http_types "github.com/mercuryqa/todo-app/internal/core/transport/http/types"
 	core_logger "github.com/mercuryqa/todo-app/internal/core/logger"
-	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/http_response"
+	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/response"
 )
 
 type PatchUserRequest struct {

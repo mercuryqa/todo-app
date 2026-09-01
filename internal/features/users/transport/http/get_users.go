@@ -5,12 +5,23 @@ import (
 	"net/http"
 
 	core_logger "github.com/mercuryqa/todo-app/internal/core/logger"
-	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/http_response"
 	core_http_request "github.com/mercuryqa/todo-app/internal/core/transport/http/request"
+	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/response"
 )
 
 type GetUsersResponse []UserDTOResponse
 
+// GetUsers      godoc
+// @Summary      Список пользователей
+// @Description  Просмотр списка пользователей с опциональной пагинацией
+// @Tags         users
+// @Produce      json
+// @Param        limit  query int false                        "Размер страницы с пользователями"
+// @Param        offset query int false                        "Смещение страницы с пользователями"
+// @Success      200 {object} GetUsersResponse                 "Успешное получение списка пользователей"
+// @Failure      400 {object} core_http_response.ErrorResponse "Bad request"
+// @Failure      500 {object} core_http_response.ErrorResponse "Internal server error"
+// @Router       /users [get]
 func (h *UsersHTTPHandler) GetUsers(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := core_logger.FromContext(ctx)

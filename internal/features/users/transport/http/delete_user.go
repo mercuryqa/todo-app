@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	core_logger "github.com/mercuryqa/todo-app/internal/core/logger"
-	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/http_response"
 	core_http_request "github.com/mercuryqa/todo-app/internal/core/transport/http/request"
+	core_http_response "github.com/mercuryqa/todo-app/internal/core/transport/http/response"
 )
 
 // DeleteUser    godoc

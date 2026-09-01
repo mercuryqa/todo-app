@@ -1,3 +1,12 @@
+// Package core_http_middleware содержит HTTP middleware (промежуточные обработчики).
+//
+// Middleware — это функция-обёртка над http.Handler.
+// Цепочка middleware выполняется последовательно: первый зарегистрированный
+// middleware выполняется первым (внешний слой «луковицы»).
+//
+// Архитектурная схема:
+//
+//	Request → CORS → RequestID → Logger → Trace → Panic → Handler → Response
 package core_http_middleware
 
 import (
@@ -6,18 +15,84 @@ import (
 
 	"github.com/google/uuid"
 	coreLogger "github.com/mercuryqa/todo-app/internal/core/logger"
-	"github.com/mercuryqa/todo-app/internal/core/transport/http/http_response"
+	"github.com/mercuryqa/todo-app/internal/core/transport/http/response"
 	"go.uber.org/zap"
 )
 
 // type ctxKey string // 1/4
 
 const (
+	// requestIDHeader — заголовок для передачи уникального идентификатора запроса.
+	// Позволяет отслеживать один запрос через все логи и системы.
 	requestIDHeader = "X-Request-ID"
 	// requestIDKey ctxKey = "request_id" // 2/4
 )
 
-// RequestID - добавляет requestID (id запроса) в хедер X-Request-ID
+// CORS — middleware для обработки Cross-Origin Resource Sharing.
+// Добавляет заголовки Access-Control-Allow-* только для разрешённых origins.
+//
+// Используем map для O(1) поиска вместо O(n) перебора списка.
+// Preflight-запросы (OPTIONS) обрабатываются сразу без передачи дальше.
+func CORS() Middleware {
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			allowedOrigins := map[string]struct{}{
+				"http://localhost:5050": {},
+			}
+
+			origin := r.Header.Get("Origin")
+
+			if _, ok := allowedOrigins[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			}
+
+			// Preflight OPTIONS — браузер проверяет разрешение CORS перед основным запросом.
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+//func CORS(allowedOriginsList []string) Middleware {
+//	allowedOrigins := make(map[string]struct{})
+//	for _, origin := range allowedOriginsList {
+//		allowedOrigins[origin] = struct{}{}
+//	}
+//
+//	return func(next http.Handler) http.Handler {
+//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//
+//			origin := r.Header.Get("Origin")
+//
+//			if _, ok := allowedOrigins[origin]; ok {
+//				w.Header().Set("Access-Control-Allow-Origin", origin)
+//				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+//				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+//			}
+//
+//			// Preflight OPTIONS — браузер проверяет разрешение CORS перед основным запросом.
+//			if r.Method == http.MethodOptions {
+//				w.WriteHeader(http.StatusOK)
+//				return
+//			}
+//
+//			next.ServeHTTP(w, r)
+//		})
+//	}
+//}
+
+// RequestID — middleware, обеспечивающий каждый запрос уникальным идентификатором.
+// Если клиент передаёт X-Request-ID — используем его (полезно для распределённой трассировки).
+// Иначе генерируем новый X-Request-ID.
+// Идентификатор добавляется и в заголовок ответа, чтобы клиент мог его использовать.
 func RequestID() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,43 +101,46 @@ func RequestID() Middleware {
 				requestID = uuid.NewString()
 			}
 
-			//ctx := context.WithValue(r.Context(), requestIDKey, requestID) // 3/4
-
 			r.Header.Set(requestIDHeader, requestID)
 			w.Header().Set(requestIDHeader, requestID)
 
 			next.ServeHTTP(w, r)
-			//next.ServeHTTP(w, r.WithContext(ctx)) // 4/4
 		})
 	}
 }
 
-// Logger - добавляет request_id и url запроса в контекст
+// Logger — middleware, кладущий логгер в контекст запроса.
+// Обогащает логгер полями request_id и url, чтобы все последующие
+// обработчики автоматически логировали эти поля.
+//
+// Важно: этот middleware должен идти ПОСЛЕ RequestID, чтобы request_id уже был доступен.
 func Logger(log *coreLogger.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := r.Header.Get(requestIDHeader)
 
+			// Создаём дочерний логгер с дополнительными полями.
 			l := log.With(
 				zap.String("request_id", requestID),
 				zap.String("url", r.URL.String()),
 			)
 
 			ctx := coreLogger.ToContext(r.Context(), l)
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// Trace - логирует входящие запросы и исходящие ответы
+// Trace — middleware для логирования входящих запросов и времени их обработки.
+// Использует ResponseWriter-обёртку, чтобы перехватить статус-код ответа,
+// который иначе недоступен после вызова WriteHeader.
 func Trace() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-			// Логируем REQUEST
 			ctx := r.Context()
 			log := coreLogger.FromContext(ctx)
-			// Оборачиваю responseWriter, чтобы сохранить статус код
+			// Оборачиваем ResponseWriter, чтобы иметь возможность прочитать статус-код.
 			rw := core_http_response.NewResponseWriter(w)
 
 			before := time.Now()
@@ -72,29 +150,25 @@ func Trace() Middleware {
 				zap.Time("time", before.UTC()),
 			)
 
-			// передаю кастомный responseWriter
 			next.ServeHTTP(rw, r)
 
-			// Логируем RESPONSE
-
-			// Чтобы получить статус код из запроса, нужна обертка которая будет запоминмть статус код
-
 			log.Debug(
-				">>> done HTTP request",
-				// получаю записанный статус код
+				"<<< done HTTP request",
 				zap.Int("status_code", rw.GetStatusCode()),
 				zap.Duration("latency", time.Now().Sub(before)),
 			)
-
 		})
 	}
 }
 
-// В первых двух middleware паника не отлавливается и приложение упадет
-// Дальше везде будет отлавливаться паника
+// Panic — middleware для перехвата паник и возврата HTTP 500.
+// Без этого middleware паника в обработчике уронила бы всю горутину,
+// а стандартная библиотека Go вернула бы пустой ответ клиенту.
+//
+// Использует defer + recover — стандартный паттерн обработки паник в Go.
 
-// Recovery - Отлавливает панику в http запросах (после выполнения запроса в defer)
-func Recovery() Middleware {
+// Panic - Отлавливает панику в http запросах (после выполнения запроса в defer)
+func Panic() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
