@@ -7,11 +7,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	core_config "github.com/mercuryqa/todo-app/internal/core/config"
 	coreLogger "github.com/mercuryqa/todo-app/internal/core/logger"
 	core_pgx_pool "github.com/mercuryqa/todo-app/internal/core/repository/postgres/pool/pgx"
 	core_http_middleware "github.com/mercuryqa/todo-app/internal/core/transport/http/middleware"
 	"github.com/mercuryqa/todo-app/internal/core/transport/http/server"
+	tasks_postgres_repository "github.com/mercuryqa/todo-app/internal/features/tasks/repository/postgres"
+	tasks_service "github.com/mercuryqa/todo-app/internal/features/tasks/service"
+	tasks_transport_http "github.com/mercuryqa/todo-app/internal/features/tasks/transport/http"
 	users_postgres_repository "github.com/mercuryqa/todo-app/internal/features/users/repository/postgres"
 	users_service "github.com/mercuryqa/todo-app/internal/features/users/service"
 	users_transport_http "github.com/mercuryqa/todo-app/internal/features/users/transport/http"
@@ -19,7 +24,8 @@ import (
 )
 
 func main() {
-	fmt.Println("Hello Todo app")
+	cfg := core_config.NewConfigMust()
+	time.Local = cfg.TimeZone
 
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
@@ -34,6 +40,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer logger.Close()
+
+	logger.Debug("application time zone", zap.Any("zone", time.Local))
 
 	// Создаём пулл соединений с PostgreSQL через библиотеку pgx.
 	// Пул переиспользует соединения, что гораздо эффективнее,
@@ -54,6 +62,11 @@ func main() {
 	usersService := users_service.NewUsersService(usersRepository)
 	usersTransportHTTP := users_transport_http.NewUsersHTTPHandler(usersService)
 
+	logger.Debug("initalizing feature", zap.String("feature", "tasks"))
+	tasksRepository := tasks_postgres_repository.NewTasksRepository(pool)
+	tasksService := tasks_service.NewTasksService(tasksRepository)
+	tasksTransportHTTP := tasks_transport_http.NewTasksHTTPHandler(tasksService)
+
 	logger.Debug("Initializing HTTP server")
 	httpServer := server.NewHTTPServer(
 		server.NewConfigMust(),
@@ -66,6 +79,7 @@ func main() {
 
 	apiVersionRouterV1 := server.NewApiVersionRouter(server.ApiVersion1)
 	apiVersionRouterV1.RegisterRoutes(usersTransportHTTP.Routes()...)
+	apiVersionRouterV1.RegisterRoutes(tasksTransportHTTP.Routes()...)
 
 	apiVersionRouterV2 := server.NewApiVersionRouter(
 		server.ApiVersion2,
