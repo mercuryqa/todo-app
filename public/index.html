@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Список дел</title>
+</head>
+<body>
+    <button onclick="loadUsers()">Получить список пользователей</button>
+    <ul id="users-list"></ul>
+    <script>
+        async function loadUsers() {
+            const result = await fetch('http://127.0.0.1:5050/api/v1/users')
+            const users = await result.json()
+
+            const list = document.getElementById('users-list')
+            list.innerHTML = users.map(user => `<li>ID: ${user.id} - FullName: ${user.full_name}</li>`).join('')
+        }
+
+    </script>
+
+</body>>
+</html>

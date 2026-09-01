@@ -48,6 +48,16 @@ func (s *HTTPServer) RegisterAPIRouters(routers ...*APIVersionRouter) {
 	}
 }
 
+// RegisterRoutes регистрирует маршруты без версионного префикса (например, главная страница "/").
+func (s *HTTPServer) RegisterRoutes(routes ...Route) {
+	for _, route := range routes {
+		path := route.Method + " " + route.Path
+		handler := route.WithMiddleware()
+
+		s.mux.Handle(path, handler)
+	}
+}
+
 // RegisterSwagger - регистирую swagger
 func (s *HTTPServer) RegisterSwagger() {
 	s.mux.Handle(

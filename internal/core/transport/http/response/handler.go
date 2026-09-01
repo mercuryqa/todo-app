@@ -6,20 +6,24 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/mercuryqa/todo-app/internal/core/domain"
 	core_errors "github.com/mercuryqa/todo-app/internal/core/errors"
-	coreLogger "github.com/mercuryqa/todo-app/internal/core/logger"
+	core_logger "github.com/mercuryqa/todo-app/internal/core/logger"
 	"go.uber.org/zap"
 )
 
-// HTTPResponseHandler обрабатывает HTTP-ответы и предоставляет доступ к логгеру.
+// HTTPResponseHandler инкапсулирует логику записи HTTP-ответов.
+// Хранит логгер и ResponseWriter, чтобы обработчикам не нужно было
+// передавать их каждый раз явно.
 type HTTPResponseHandler struct {
-	log *coreLogger.Logger
+	log *core_logger.Logger
 	rw  http.ResponseWriter
 }
 
-// NewHTTPResponseHandler создаёт обработчик HTTP-ответов с переданным логгером и ResponseWriter.
+// NewHTTPResponseHandler создаёт обработчик ответов для конкретного запроса.
+// Вызывается в начале каждого HTTP-обработчика.
 func NewHTTPResponseHandler(
-	log *coreLogger.Logger,
+	log *core_logger.Logger,
 	rw http.ResponseWriter,
 ) *HTTPResponseHandler {
 	return &HTTPResponseHandler{
@@ -46,7 +50,25 @@ func (h *HTTPResponseHandler) NoContentResponse() {
 	h.rw.WriteHeader(http.StatusNoContent)
 }
 
+// HTMLResponse отправляет HTML-страницу с Content-Type: text/html.
+func (h *HTTPResponseHandler) HTMLResponse(htmlFile domain.File) {
+	h.rw.WriteHeader(http.StatusOK)
+
+	h.rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := h.rw.Write(htmlFile.Buffer()); err != nil {
+		h.log.Error("write HTML HTTP response", zap.Error(err))
+	}
+}
+
 // ErrorResponse транслирует core ошибку в HTTP-статус через errors.Is().
+//
+// Маппинг:
+//   - ErrInvalidArgument → 400
+//   - ErrNotFound        → 404
+//   - ErrConflict        → 409
+//   - остальное          → 500
+//
+// Каждый тип ошибки логируется на соответствующем уровне (Warn/Debug/Error).
 func (h *HTTPResponseHandler) ErrorResponse(err error, msg string) {
 	var (
 		statusCode int
@@ -54,17 +76,14 @@ func (h *HTTPResponseHandler) ErrorResponse(err error, msg string) {
 	)
 
 	switch {
-	// не совсем ошибка, но нештатная ситуация (почему делают такие запросы?) - warn
 	case errors.Is(err, core_errors.ErrInvalidArgument):
 		statusCode = http.StatusBadRequest
 		logFunc = h.log.Warn
 
-	// not found - проблема на стороне клиента - debug
 	case errors.Is(err, core_errors.ErrNotFound):
 		statusCode = http.StatusNotFound
 		logFunc = h.log.Debug
 
-	// не совсем ошибка, но нештатная ситуация (почему делают такие запросы?) - warn
 	case errors.Is(err, core_errors.ErrConflict):
 		statusCode = http.StatusConflict
 		logFunc = h.log.Warn
@@ -75,6 +94,7 @@ func (h *HTTPResponseHandler) ErrorResponse(err error, msg string) {
 	}
 
 	logFunc(msg, zap.Error(err))
+
 	h.errorResponse(
 		statusCode,
 		err,
@@ -82,19 +102,19 @@ func (h *HTTPResponseHandler) ErrorResponse(err error, msg string) {
 	)
 }
 
-// PanicResponse обрабатывает панику, возникшую при обработке HTTP-запроса,
-// и возвращает клиенту ответ с кодом 500 и информацией об ошибке.
+// PanicResponse формирует HTTP 500 при перехвате паники.
+// Вызывается из middleware Panic — см. internal/core/transport/http/middleware/common.go.
 func (h *HTTPResponseHandler) PanicResponse(p any, msg string) {
 	statusCode := http.StatusInternalServerError
 	err := fmt.Errorf("unexpected panic: %v", p)
 
 	h.log.Error(msg, zap.Error(err))
+
 	h.errorResponse(
 		statusCode,
 		err,
 		msg,
 	)
-
 }
 
 // errorResponse — внутренний метод: собирает ErrorResponse и вызывает JSONResponse.
@@ -108,6 +128,8 @@ func (h *HTTPResponseHandler) errorResponse(
 		Message: msg,
 	}
 
-	h.JSONResponse(response, statusCode)
-
+	h.JSONResponse(
+		response,
+		statusCode,
+	)
 }
